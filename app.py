@@ -52,6 +52,9 @@ disease_details = {
 REGION_GRID = (2, 2)
 CONFIDENCE_THRESHOLD = 0.4
 
+# === Define Coconut-Related Classes (filter) ===
+COCONUT_CLASSES = {"coconut", "coconut tree", "coconut leaf", "coconut stem", "coconut structure"}
+
 # === Utility: Split image into subregions ===
 def split_image_regions(image, grid=(2, 2)):
     width, height = image.size
@@ -76,11 +79,11 @@ def index():
 @app.route('/predict', methods=['POST'])
 def predict_image():
     if 'image' not in request.files:
-        return "❌ No image uploaded", 400
+        return render_template('index.html', error_message="❌ No image uploaded")
 
     file = request.files['image']
     if file.filename == '':
-        return "❌ No file selected", 400
+        return render_template('index.html', error_message="❌ No file selected")
 
     filename = secure_filename(file.filename)
     image_path = os.path.join(UPLOAD_FOLDER, filename)
@@ -101,9 +104,14 @@ def predict_image():
                 predictions.append(label)
 
     if not predictions:
-        return "⚠️ No disease confidently detected in image.", 500
+        return render_template('index.html', error_message="⚠️ No disease confidently detected in image.")
 
-    unique_labels = list(set(predictions))
+    # === Filter only coconut-related predictions ===
+    coconut_predictions = [p for p in predictions if any(coco in p.lower() for coco in COCONUT_CLASSES)]
+    if not coconut_predictions:
+        return render_template('index.html', error_message="🚫 Only coconut tree related images are allowed. Please upload a valid coconut tree/leaf/stem image.")
+
+    unique_labels = list(set(coconut_predictions))
     diseases_info = []
     for label in unique_labels:
         norm_label = normalize_key(label)
@@ -111,7 +119,7 @@ def predict_image():
         diseases_info.append({
             "label": label,
             "details": {
-                "explanation": raw_details.get("explanation", f"The image shows signs of '{label}'."),
+                "explanation": raw_details.get("explanation", f"The image shows signs of '{label}'."), 
                 "water": raw_details.get("water", "N/A"),
                 "fertilizer": raw_details.get("fertilizer", "N/A"),
                 "medicine": raw_details.get("medicine", ["N/A"]),
@@ -129,11 +137,11 @@ def predict_image():
 @app.route('/predict_video', methods=['POST'])
 def predict_video():
     if 'video' not in request.files:
-        return "❌ No video uploaded", 400
+        return render_template('index.html', error_message="❌ No video uploaded")
 
     file = request.files['video']
     if file.filename == '':
-        return "❌ No video selected", 400
+        return render_template('index.html', error_message="❌ No file selected")
 
     filename = secure_filename(file.filename)
     video_path = os.path.join(UPLOAD_FOLDER, filename)
@@ -177,9 +185,14 @@ def predict_video():
     os.remove(video_path)
 
     if not all_predictions:
-        return "⚠️ No diseases detected with confidence in video.", 500
+        return render_template('index.html', error_message="⚠️ No diseases detected with confidence in video.")
 
-    label_counter = Counter(all_predictions)
+    # === Filter only coconut-related predictions ===
+    coconut_predictions = [p for p in all_predictions if any(coco in p.lower() for coco in COCONUT_CLASSES)]
+    if not coconut_predictions:
+        return render_template('index.html', error_message="🚫 Only coconut tree related videos are allowed. Please upload a valid coconut tree/leaf/stem video.")
+
+    label_counter = Counter(coconut_predictions)
     most_common_labels = [label for label, count in label_counter.items() if count >= 2]
     if not most_common_labels:
         most_common_labels = list(label_counter.keys())
@@ -191,7 +204,7 @@ def predict_video():
         diseases_info.append({
             "label": label,
             "details": {
-                "explanation": raw_details.get("explanation", f"The video shows signs of '{label}'."),
+                "explanation": raw_details.get("explanation", f"The video shows signs of '{label}'."), 
                 "water": raw_details.get("water", "N/A"),
                 "fertilizer": raw_details.get("fertilizer", "N/A"),
                 "medicine": raw_details.get("medicine", ["N/A"]),
@@ -205,6 +218,5 @@ def predict_video():
                            image_url=None)
 
 # === Run Server ===
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
-
